@@ -6,7 +6,7 @@
 
 ## Levantar con Docker Compose
 1. Copiar `.env.example` a `.env` y ajustar si quieres.
-2. `docker compose up --build`
+2. `docker compose build`
 3. `docker compose up`
 
 Servicios:
