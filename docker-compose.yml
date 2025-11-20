@@ -1,4 +1,5 @@
 version: "3.8"
+
 services:
   db:
     image: postgres:15
@@ -20,18 +21,26 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
 
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build: .
     command: node src/api/index.js
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chatdb
-      - JWT_SECRET=supersecretkey
-      - JWT_EXPIRES_IN=7d
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      - API_PORT=3000
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/chatdb
+      JWT_SECRET: supersecretkey
+      JWT_EXPIRES_IN: 7d
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      API_PORT: 3000
     depends_on:
-      - db
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_started
     ports:
       - "3000:3000"
     volumes:
@@ -42,12 +51,13 @@ services:
     build: .
     command: node src/ws/index.js
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chatdb
-      - JWT_SECRET=supersecretkey
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      - WS_PORT=4000
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/chatdb
+      JWT_SECRET: supersecretkey
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      WS_PORT: 4000
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "4000:4000"
     volumes:
@@ -58,11 +68,13 @@ services:
     build: .
     command: node src/worker/consumer.js
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chatdb
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/chatdb
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     depends_on:
-      - db
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_started
     volumes:
       - ./:/app
     working_dir: /app

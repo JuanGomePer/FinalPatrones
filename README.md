@@ -1,4 +1,4 @@
-# FinalPatrones# Chat PoC
+# FinalPatrones
 
 ## Requisitos
 - Docker & docker-compose

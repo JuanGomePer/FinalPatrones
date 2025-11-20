@@ -1,6 +1,6 @@
 const express = require('express');
-const db = require('../db');
-const { verify } = require('../utils/jwt');
+const db = require('../../db');
+const { verify } = require('../../utils/jwt');
 
 const router = express.Router();
 
