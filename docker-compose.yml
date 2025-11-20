@@ -1,0 +1,71 @@
+version: "3.8"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: chatdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  api:
+    build: .
+    command: node src/api/index.js
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chatdb
+      - JWT_SECRET=supersecretkey
+      - JWT_EXPIRES_IN=7d
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - API_PORT=3000
+    depends_on:
+      - db
+      - rabbitmq
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/app
+    working_dir: /app
+
+  ws:
+    build: .
+    command: node src/ws/index.js
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chatdb
+      - JWT_SECRET=supersecretkey
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - WS_PORT=4000
+    depends_on:
+      - rabbitmq
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./:/app
+    working_dir: /app
+
+  worker:
+    build: .
+    command: node src/worker/consumer.js
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/chatdb
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - db
+      - rabbitmq
+    volumes:
+      - ./:/app
+    working_dir: /app
+
+volumes:
+  db-data:
