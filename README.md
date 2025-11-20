@@ -2,7 +2,7 @@
 
 ## Requisitos
 - Docker & docker-compose
-- Node.js >= 18 (si ejecutas local sin Docker)
+- Node.js >= 18 
 
 ## Levantar con Docker Compose
 1. Copiar `.env.example` a `.env` y ajustar si quieres.
