@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 // Puedes cambiar estas URLs si tu backend está en otro host/puerto
-const API_BASE =
-  import.meta.env.VITE_API_URL || "http://localhost:3000";
-const WS_BASE =
-  import.meta.env.VITE_WS_URL || "ws://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const WS_BASE = import.meta.env.VITE_WS_URL || "ws://localhost:4000";
 
 function App() {
   const [authToken, setAuthToken] = useState(null);
@@ -21,12 +19,29 @@ function App() {
 
   const isLoggedIn = !!authToken;
 
-  // ---- Helpers HTTP ----
+  useEffect(() => {
+    const token = sessionStorage.getItem("token");
+    const user = sessionStorage.getItem("user");
+
+    if (token) {
+      setAuthToken(token);
+    }
+
+    if (user) {
+      try {
+        setCurrentUser(JSON.parse(user)); // <-- Restaurar usuario guardado
+      } catch {
+        setCurrentUser(null);
+      }
+    }
+  }, []);
+
   async function http(path, options = {}) {
     const headers = {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     };
+
     if (authToken) {
       headers.Authorization = `Bearer ${authToken}`;
     }
@@ -35,6 +50,12 @@ function App() {
       ...options,
       headers,
     });
+
+    // Detect token expiration
+    if (res.status === 401) {
+      handleLogout(); // <-- Auto logout
+      throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+    }
 
     let data = null;
     try {
@@ -47,6 +68,7 @@ function App() {
       const msg = data?.error || data?.message || "Error en la petición";
       throw new Error(msg);
     }
+
     return data;
   }
 
@@ -71,7 +93,8 @@ function App() {
         return d;
       });
 
-      // Asumo estructura { token, user: { id, username } }
+      sessionStorage.setItem("token", data.token);
+      sessionStorage.setItem("user", JSON.stringify(data.user)); // <-- 💾 GUARDAR USER
       setAuthToken(data.token);
       setCurrentUser(data.user);
     } catch (err) {
@@ -111,6 +134,7 @@ function App() {
   }
 
   function handleLogout() {
+    sessionStorage.removeItem("token");
     setAuthToken(null);
     setCurrentUser(null);
     setSelectedRoom(null);
@@ -121,14 +145,54 @@ function App() {
     setWs(null);
   }
 
-  // ---- WebSocket ----
-
-  // Creamos el WS cuando tengamos token
   useEffect(() => {
-    if (!authToken) {
-      if (ws) ws.close();
-      setWs(null);
-      setWsStatus("Desconectado");
+    const stored = sessionStorage.getItem("selectedRoom");
+    if (stored && authToken) {
+      try {
+        const room = JSON.parse(stored);
+        setSelectedRoom(room);
+        loadRoomMessages(room.id);
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          sendWs({ type: "join", roomId: room.id });
+        }
+      } catch {}
+    }
+  }, [ws, authToken]);
+
+  // Cuando cambia selectedRoom → enviar join al WS si está conectado
+  useEffect(() => {
+    if (!selectedRoom) return;
+    if (!ws) return;
+
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "join", roomId: selectedRoom.id }));
+      console.log("[FRONT → WS] JOIN enviado a room", selectedRoom.id);
+    } else {
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: "join", roomId: selectedRoom.id }));
+        console.log(
+          "[FRONT → WS] JOIN enviado en onopen a room",
+          selectedRoom.id
+        );
+      };
+    }
+  }, [selectedRoom, ws]);
+
+  function isTokenExpired(token) {
+    try {
+      const { exp } = JSON.parse(atob(token.split(".")[1]));
+      return Date.now() >= exp * 1000;
+    } catch {
+      return true;
+    }
+  }
+
+  useEffect(() => {
+    if (!authToken) return;
+
+    if (isTokenExpired(authToken)) {
+      handleLogout();
       return;
     }
 
@@ -138,11 +202,8 @@ function App() {
 
     socket.onopen = () => {
       setWsStatus("Conectado");
-      // Si ya teníamos una sala seleccionada, rejoin:
       if (selectedRoom) {
-        socket.send(
-          JSON.stringify({ type: "join", roomId: selectedRoom.id })
-        );
+        socket.send(JSON.stringify({ type: "join", roomId: selectedRoom.id }));
       }
     };
 
@@ -159,14 +220,15 @@ function App() {
       try {
         const msg = JSON.parse(event.data);
 
-        if (msg.type === "message") {
-          const message = msg.data; // viene de tu server: {id, content, created_at, user, ...}
+        if (msg.type === "error" && msg.reason === "invalid_token") {
+          handleLogout();
+          return;
+        }
 
-          // Solo mostramos si es de la sala actual
+        if (msg.type === "message") {
+          const message = msg.data;
           const roomIdFromMessage = message.room_id || message.roomId;
-          if (!selectedRoom || roomIdFromMessage !== selectedRoom.id) {
-            return;
-          }
+          if (!selectedRoom || roomIdFromMessage !== selectedRoom.id) return;
 
           setMessages((prev) => [...prev, message]);
         }
@@ -175,10 +237,7 @@ function App() {
       }
     };
 
-    return () => {
-      socket.close();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => socket.close();
   }, [authToken]);
 
   function sendWs(payload) {
@@ -226,7 +285,6 @@ function App() {
   }
 
   async function joinRoom(room) {
-    // Si es privada pedimos password
     let password = null;
     if (room.is_private) {
       password = window.prompt("Sala privada, ingresa el password:");
@@ -234,19 +292,18 @@ function App() {
     }
 
     try {
-      // Validar / entrar a la sala vía API
       await http(`/rooms/${room.id}/join`, {
         method: "POST",
         body: JSON.stringify({ password }),
       });
 
       setSelectedRoom(room);
+      sessionStorage.setItem("selectedRoom", JSON.stringify(room)); // <--- SAVE
+
       setMessages([]);
 
-      // Historial
       await loadRoomMessages(room.id);
 
-      // Avisar por WS
       if (ws && ws.readyState === WebSocket.OPEN) {
         sendWs({ type: "join", roomId: room.id });
       }
@@ -258,19 +315,25 @@ function App() {
   async function loadRoomMessages(roomId) {
     try {
       const data = await http(`/rooms/${roomId}/messages?page=1&pageSize=50`);
+      console.log("Raw data from API:", data);
 
-      const msgs = Array.isArray(data)
-        ? data
-        : data.items || data.messages || [];
+      const msgs = Array.isArray(data.messages) ? data.messages : [];
 
-      // Ordenar por fecha ascendente
+      // Sort by created_at
       msgs.sort(
         (a, b) =>
-          new Date(a.created_at).getTime() -
-          new Date(b.created_at).getTime()
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
 
-      setMessages(msgs);
+      console.log("Sorted messages:", msgs);
+
+      // Ensure each message has a user object
+      const messagesWithUser = msgs.map((m) => ({
+        ...m,
+        user: m.user || { id: m.user_id, username: m.username || "Unknown" },
+      }));
+
+      setMessages(messagesWithUser);
     } catch (err) {
       console.error("Error cargando mensajes:", err);
     }
@@ -282,33 +345,32 @@ function App() {
     e.preventDefault();
     const input = e.target.message;
     const text = input.value.trim();
-    if (!text || !selectedRoom) return;
+    if (!text || !selectedRoom || !currentUser?.id) return;
 
-    const clientId =
-      (crypto && crypto.randomUUID && crypto.randomUUID()) ||
-      `${Date.now()}`;
+    const clientId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
 
-    try {
-      sendWs({
-        type: "message",
-        roomId: selectedRoom.id,
-        content: text,
-        clientId,
-      });
+    // Enviar mensaje al WebSocket con uid
+    sendWs({
+      type: "message",
+      roomId: selectedRoom.id,
+      content: text,
+      clientId,
+      user: { id: currentUser.id, username: currentUser.username }, // <-- enviar uid
+    });
 
-      // Pintamos optimista
-      const fakeMessage = {
+    // Renderizado optimista
+    setMessages((prev) => [
+      ...prev,
+      {
         id: clientId,
         room_id: selectedRoom.id,
         content: text,
         created_at: new Date().toISOString(),
-        user: currentUser,
-      };
-      setMessages((prev) => [...prev, fakeMessage]);
-      input.value = "";
-    } catch (err) {
-      alert("No se pudo enviar mensaje: " + err.message);
-    }
+        user: { id: currentUser.id, username: currentUser.username },
+      },
+    ]);
+
+    input.value = "";
   }
 
   // Cargar salas cuando haya token

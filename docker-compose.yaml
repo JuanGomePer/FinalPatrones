@@ -128,6 +128,13 @@ services:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80" # nginx serves the app
+    depends_on:
+      - api
+
 volumes:
   db-data:
   grafana-data:

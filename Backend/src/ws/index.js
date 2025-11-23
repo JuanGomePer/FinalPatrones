@@ -1,28 +1,27 @@
-require("../../otel"); // before anything else
-
+// Must be required first for OpenTelemetry
+require("../../otel");
 require("dotenv").config();
+
 const WebSocket = require("ws");
 const url = require("url");
 const jwtUtils = require("../utils/jwt");
-const { connect } = require("../broker"); // <-- FIXED
+const { connect } = require("../broker");
 
 const WS_PORT = process.env.WS_PORT || 4000;
 
 (async () => {
   let channel;
 
-  // ---- RabbitMQ retry logic ----
   async function connectRabbitMQ(retries = 10) {
     while (retries > 0) {
       try {
-        console.log("WS trying to connect to RabbitMQ...");
-        const { conn, channel: ch } = await connect();
-        console.log("WS connected to RabbitMQ");
+        console.log("[WS] Trying to connect to RabbitMQ...");
+        const { channel: ch } = await connect();
+        console.log("[WS] Connected to RabbitMQ");
         return ch;
       } catch (err) {
-        console.error("WS RabbitMQ error:", err.message);
+        console.error("[WS] RabbitMQ error:", err.message);
         retries--;
-        console.log(`Retrying in 3s... (${retries} retries left)`);
         await new Promise((res) => setTimeout(res, 3000));
       }
     }
@@ -31,23 +30,16 @@ const WS_PORT = process.env.WS_PORT || 4000;
 
   channel = await connectRabbitMQ();
 
-  // -----------------------------------------------------
-  // NOW RabbitMQ is ready → you can safely assert queues
-  // -----------------------------------------------------
-  const { queue } = await channel.assertQueue("broadcast_queue", {
-    durable: true,
-  });
+  // Queue for persisted messages
+  await channel.assertQueue("broadcast_queue", { durable: true });
   await channel.bindQueue("broadcast_queue", "chat", "message.persisted");
 
-  // Start WebSocket server AFTER RabbitMQ works
   const wss = new WebSocket.Server({ port: WS_PORT });
-  console.log("WebSocket server running on port", WS_PORT);
+  console.log("[WS] Server running on port", WS_PORT);
 
   const rooms = new Map();
 
-  // ----------------------------------------------------------------
-  //  Worker → WS broadcast: worker persists messages, WS distributes
-  // ----------------------------------------------------------------
+  // RABBITMQ → WS BROADCAST
   channel.consume("broadcast_queue", (msg) => {
     if (!msg) return;
     try {
@@ -55,38 +47,34 @@ const WS_PORT = process.env.WS_PORT || 4000;
       const { roomId, message } = payload;
 
       const set = rooms.get(roomId);
-      if (set) {
-        for (const client of set) {
-          if (client.ws.readyState === WebSocket.OPEN) {
-            client.ws.send(JSON.stringify({ type: "message", data: message }));
-          }
+      if (!set) return channel.ack(msg);
+
+      console.log(`[WS] Broadcasting to ${set.size} clients in room ${roomId}`);
+      for (const client of set) {
+        if (client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify({ type: "message", data: message }));
         }
       }
+
       channel.ack(msg);
-    } catch (e) {
-      console.error("Failed processing broadcast", e);
+    } catch (err) {
+      console.error("[WS] Failed processing broadcast:", err);
       channel.nack(msg, false, false);
     }
   });
 
-  // ----------------------------------------------------------------
-  //  WS → RabbitMQ
-  // ----------------------------------------------------------------
+  // WS → RabbitMQ
   wss.on("connection", (ws, req) => {
     const parsed = url.parse(req.url, true);
     const token = parsed.query.token;
 
-    if (!token) {
-      ws.close(4001, "missing token");
-      return;
-    }
+    if (!token) return ws.close(4001, "missing token");
 
     let payload;
     try {
       payload = jwtUtils.verify(token);
     } catch {
-      ws.close(4002, "invalid token");
-      return;
+      return ws.close(4002, "invalid token");
     }
 
     const user = { id: payload.sub, username: payload.username };
@@ -94,9 +82,9 @@ const WS_PORT = process.env.WS_PORT || 4000;
     ws.on("message", async (raw) => {
       try {
         const msg = JSON.parse(raw.toString());
+        const roomId = msg.roomId;
 
         if (msg.type === "join") {
-          const roomId = msg.roomId;
           if (!rooms.has(roomId)) rooms.set(roomId, new Set());
           rooms.get(roomId).add({ ws, user });
 
@@ -107,13 +95,10 @@ const WS_PORT = process.env.WS_PORT || 4000;
             { persistent: true }
           );
         } else if (msg.type === "leave") {
-          const roomId = msg.roomId;
           const set = rooms.get(roomId);
-
           if (set) {
-            for (const client of Array.from(set)) {
+            for (const client of Array.from(set))
               if (client.ws === ws) set.delete(client);
-            }
             if (set.size === 0) rooms.delete(roomId);
           }
 
@@ -124,8 +109,8 @@ const WS_PORT = process.env.WS_PORT || 4000;
             { persistent: true }
           );
         } else if (msg.type === "message") {
-          const payload = {
-            roomId: msg.roomId,
+          const messagePayload = {
+            roomId,
             content: msg.content,
             user,
             clientGeneratedId: msg.clientId ?? null,
@@ -135,20 +120,19 @@ const WS_PORT = process.env.WS_PORT || 4000;
           await channel.publish(
             "chat",
             "message.new",
-            Buffer.from(JSON.stringify(payload)),
+            Buffer.from(JSON.stringify(messagePayload)),
             { persistent: true }
           );
         }
       } catch (err) {
-        console.error("WS message error:", err);
+        console.error("[WS] message error:", err);
       }
     });
 
     ws.on("close", () => {
       for (const [roomId, set] of rooms.entries()) {
-        for (const client of Array.from(set)) {
+        for (const client of Array.from(set))
           if (client.ws === ws) set.delete(client);
-        }
         if (set.size === 0) rooms.delete(roomId);
       }
     });
