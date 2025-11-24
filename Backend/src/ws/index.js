@@ -22,6 +22,7 @@ const WS_PORT = process.env.WS_PORT || 4000;
       } catch (err) {
         console.error("[WS] RabbitMQ error:", err.message);
         retries--;
+        console.log(`[WS] Retrying in 3s... (${retries} retries left)`);
         await new Promise((res) => setTimeout(res, 3000));
       }
     }
@@ -39,6 +40,15 @@ const WS_PORT = process.env.WS_PORT || 4000;
 
   const rooms = new Map();
 
+  // Helper to log current users in rooms
+  function logRooms() {
+    console.log("[WS] Current rooms and users:");
+    for (const [roomId, set] of rooms.entries()) {
+      const usernames = Array.from(set).map((c) => c.user.username);
+      console.log(`  Room ${roomId}: ${usernames.join(", ")}`);
+    }
+  }
+
   // RABBITMQ → WS BROADCAST
   channel.consume("broadcast_queue", (msg) => {
     if (!msg) return;
@@ -47,15 +57,28 @@ const WS_PORT = process.env.WS_PORT || 4000;
       const { roomId, message } = payload;
 
       const set = rooms.get(roomId);
-      if (!set) return channel.ack(msg);
+      if (!set) {
+        console.log(`[WS] No clients in room ${roomId}, skipping broadcast`);
+        return channel.ack(msg);
+      }
 
-      console.log(`[WS] Broadcasting to ${set.size} clients in room ${roomId}`);
+      console.log(
+        `[WS] Broadcasting message to ${set.size} clients in room ${roomId}`
+      );
+      console.log(
+        `  Message content: ${message.content} from user ${message.user.username}`
+      );
+
       for (const client of set) {
         if (client.ws.readyState === WebSocket.OPEN) {
           client.ws.send(JSON.stringify({ type: "message", data: message }));
+          console.log(`    Sent to ${client.user.username}`);
+        } else {
+          console.log(`    Client ${client.user.username} not open, skipping`);
         }
       }
 
+      logRooms();
       channel.ack(msg);
     } catch (err) {
       console.error("[WS] Failed processing broadcast:", err);
@@ -78,15 +101,22 @@ const WS_PORT = process.env.WS_PORT || 4000;
     }
 
     const user = { id: payload.sub, username: payload.username };
+    console.log(`[WS] New WS connection from user ${user.username}`);
 
     ws.on("message", async (raw) => {
       try {
         const msg = JSON.parse(raw.toString());
         const roomId = msg.roomId;
 
+        console.log(
+          `[WS] Received message type "${msg.type}" from ${user.username}`
+        );
+
         if (msg.type === "join") {
           if (!rooms.has(roomId)) rooms.set(roomId, new Set());
           rooms.get(roomId).add({ ws, user });
+          console.log(`[WS] ${user.username} joined room ${roomId}`);
+          logRooms();
 
           await channel.publish(
             "chat",
@@ -101,6 +131,8 @@ const WS_PORT = process.env.WS_PORT || 4000;
               if (client.ws === ws) set.delete(client);
             if (set.size === 0) rooms.delete(roomId);
           }
+          console.log(`[WS] ${user.username} left room ${roomId}`);
+          logRooms();
 
           await channel.publish(
             "chat",
@@ -116,7 +148,9 @@ const WS_PORT = process.env.WS_PORT || 4000;
             clientGeneratedId: msg.clientId ?? null,
             createdAt: new Date().toISOString(),
           };
-
+          console.log(
+            `[WS] Publishing message from ${user.username} to RabbitMQ`
+          );
           await channel.publish(
             "chat",
             "message.new",
@@ -130,11 +164,13 @@ const WS_PORT = process.env.WS_PORT || 4000;
     });
 
     ws.on("close", () => {
+      console.log(`[WS] Connection closed for user ${user.username}`);
       for (const [roomId, set] of rooms.entries()) {
         for (const client of Array.from(set))
           if (client.ws === ws) set.delete(client);
         if (set.size === 0) rooms.delete(roomId);
       }
+      logRooms();
     });
   });
 })();

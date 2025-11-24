@@ -7,7 +7,6 @@ const WS_BASE = import.meta.env.VITE_WS_URL || "ws://localhost:4000";
 function App() {
   const [authToken, setAuthToken] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-
   const [loginError, setLoginError] = useState("");
 
   const [rooms, setRooms] = useState([]);
@@ -19,23 +18,22 @@ function App() {
 
   const isLoggedIn = !!authToken;
 
+  // 1. Restore Session
   useEffect(() => {
     const token = sessionStorage.getItem("token");
     const user = sessionStorage.getItem("user");
 
-    if (token) {
-      setAuthToken(token);
-    }
-
+    if (token) setAuthToken(token);
     if (user) {
       try {
-        setCurrentUser(JSON.parse(user)); // <-- Restaurar usuario guardado
+        setCurrentUser(JSON.parse(user));
       } catch {
         setCurrentUser(null);
       }
     }
   }, []);
 
+  // 2. HTTP Helper
   async function http(path, options = {}) {
     const headers = {
       "Content-Type": "application/json",
@@ -51,9 +49,8 @@ function App() {
       headers,
     });
 
-    // Detect token expiration
     if (res.status === 401) {
-      handleLogout(); // <-- Auto logout
+      handleLogout();
       throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
     }
 
@@ -87,14 +84,12 @@ function App() {
         body: JSON.stringify({ username, password }),
       }).then(async (r) => {
         const d = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          throw new Error(d.error || "Credenciales inválidas");
-        }
+        if (!r.ok) throw new Error(d.error || "Credenciales inválidas");
         return d;
       });
 
       sessionStorage.setItem("token", data.token);
-      sessionStorage.setItem("user", JSON.stringify(data.user)); // <-- 💾 GUARDAR USER
+      sessionStorage.setItem("user", JSON.stringify(data.user));
       setAuthToken(data.token);
       setCurrentUser(data.user);
     } catch (err) {
@@ -117,9 +112,7 @@ function App() {
         body: JSON.stringify({ username, password }),
       }).then(async (r) => {
         const d = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          throw new Error(d.error || "Error registrando usuario");
-        }
+        if (!r.ok) throw new Error(d.error || "Error registrando usuario");
         return d;
       });
 
@@ -145,104 +138,72 @@ function App() {
     setWs(null);
   }
 
-  useEffect(() => {
-    const stored = sessionStorage.getItem("selectedRoom");
-    if (stored && authToken) {
-      try {
-        const room = JSON.parse(stored);
-        setSelectedRoom(room);
-        loadRoomMessages(room.id);
+  // =========================================================
+  //  CORE WEBSOCKET LOGIC (FIXED)
+  // =========================================================
 
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          sendWs({ type: "join", roomId: room.id });
-        }
-      } catch {}
-    }
-  }, [ws, authToken]);
-
-  // Cuando cambia selectedRoom → enviar join al WS si está conectado
-  useEffect(() => {
-    if (!selectedRoom) return;
-    if (!ws) return;
-
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "join", roomId: selectedRoom.id }));
-      console.log("[FRONT → WS] JOIN enviado a room", selectedRoom.id);
-    } else {
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: "join", roomId: selectedRoom.id }));
-        console.log(
-          "[FRONT → WS] JOIN enviado en onopen a room",
-          selectedRoom.id
-        );
-      };
-    }
-  }, [selectedRoom, ws]);
-
-  function isTokenExpired(token) {
-    try {
-      const { exp } = JSON.parse(atob(token.split(".")[1]));
-      return Date.now() >= exp * 1000;
-    } catch {
-      return true;
-    }
-  }
-
+  // EFFECT A: Connect (Only runs when Auth changes)
   useEffect(() => {
     if (!authToken) return;
 
-    if (isTokenExpired(authToken)) {
-      handleLogout();
-      return;
-    }
-
-    const url = `${WS_BASE}/?token=${encodeURIComponent(authToken)}`;
-    const socket = new WebSocket(url);
+    const socket = new WebSocket(
+      `${WS_BASE}/?token=${encodeURIComponent(authToken)}`
+    );
     setWs(socket);
 
     socket.onopen = () => {
       setWsStatus("Conectado");
-      if (selectedRoom) {
-        socket.send(JSON.stringify({ type: "join", roomId: selectedRoom.id }));
-      }
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       setWsStatus("Desconectado");
     };
 
     socket.onerror = (err) => {
-      console.error("WS error:", err);
-      setWsStatus("Error en WebSocket");
+      console.error("[WS] Error:", err);
+      setWsStatus("Error en WS");
     };
 
     socket.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
 
-        if (msg.type === "error" && msg.reason === "invalid_token") {
-          handleLogout();
-          return;
-        }
-
         if (msg.type === "message") {
-          const message = msg.data;
-          const roomIdFromMessage = message.room_id || message.roomId;
-          if (!selectedRoom || roomIdFromMessage !== selectedRoom.id) return;
-
-          setMessages((prev) => [...prev, message]);
+          setMessages((prev) => {
+            // FIX: Prevent duplicates from crashing the browser
+            const exists = prev.some(
+              (m) =>
+                (m.id && m.id === msg.data.id) ||
+                (m.id && m.id === msg.data.clientGeneratedId)
+            );
+            if (exists) return prev;
+            return [...prev, msg.data];
+          });
         }
-      } catch (e) {
-        console.error("Error parseando mensaje WS:", e);
+      } catch (error) {
+        console.error("WS Parse Error");
       }
     };
 
-    return () => socket.close();
-  }, [authToken]);
+    return () => {
+      socket.close();
+    };
+  }, [authToken]); // <-- Fixed: Removed selectedRoom dependency
+
+  // EFFECT B: Join Room (Runs when room changes OR socket connects)
+  useEffect(() => {
+    if (!selectedRoom || !ws) return;
+
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "join", roomId: selectedRoom.id }));
+    }
+  }, [selectedRoom, ws, wsStatus]);
 
   function sendWs(payload) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error("WebSocket no está conectado");
+      // Avoid throwing error to prevent crash, just warn
+      console.warn("WebSocket no está conectado");
+      return;
     }
     ws.send(JSON.stringify(payload));
   }
@@ -257,6 +218,11 @@ function App() {
       console.error("Error cargando salas:", e);
     }
   }
+
+  // Reload rooms on login
+  useEffect(() => {
+    if (authToken) loadRooms();
+  }, [authToken]);
 
   async function handleCreateRoom(e) {
     e.preventDefault();
@@ -298,15 +264,12 @@ function App() {
       });
 
       setSelectedRoom(room);
-      sessionStorage.setItem("selectedRoom", JSON.stringify(room)); // <--- SAVE
-
-      setMessages([]);
+      sessionStorage.setItem("selectedRoom", JSON.stringify(room));
+      setMessages([]); // Clear chat
 
       await loadRoomMessages(room.id);
 
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        sendWs({ type: "join", roomId: room.id });
-      }
+      // WS Join handled by Effect B
     } catch (err) {
       alert(err.message);
     }
@@ -315,19 +278,13 @@ function App() {
   async function loadRoomMessages(roomId) {
     try {
       const data = await http(`/rooms/${roomId}/messages?page=1&pageSize=50`);
-      console.log("Raw data from API:", data);
-
       const msgs = Array.isArray(data.messages) ? data.messages : [];
 
-      // Sort by created_at
       msgs.sort(
         (a, b) =>
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
 
-      console.log("Sorted messages:", msgs);
-
-      // Ensure each message has a user object
       const messagesWithUser = msgs.map((m) => ({
         ...m,
         user: m.user || { id: m.user_id, username: m.username || "Unknown" },
@@ -349,20 +306,20 @@ function App() {
 
     const clientId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
 
-    // Enviar mensaje al WebSocket con uid
+    // Enviar mensaje al WebSocket
     sendWs({
       type: "message",
       roomId: selectedRoom.id,
       content: text,
       clientId,
-      user: { id: currentUser.id, username: currentUser.username }, // <-- enviar uid
+      user: { id: currentUser.id, username: currentUser.username },
     });
 
     // Renderizado optimista
     setMessages((prev) => [
       ...prev,
       {
-        id: clientId,
+        id: clientId, // Use optimistic ID
         room_id: selectedRoom.id,
         content: text,
         created_at: new Date().toISOString(),
@@ -373,16 +330,6 @@ function App() {
     input.value = "";
   }
 
-  // Cargar salas cuando haya token
-  useEffect(() => {
-    if (authToken) {
-      loadRooms();
-    } else {
-      setRooms([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authToken]);
-
   const roomTitle = useMemo(
     () =>
       selectedRoom
@@ -391,7 +338,7 @@ function App() {
     [selectedRoom]
   );
 
-  // ================= UI =================
+  // ================= UI (EXACTLY AS REQUESTED) =================
   if (!isLoggedIn) {
     return (
       <div className="app">

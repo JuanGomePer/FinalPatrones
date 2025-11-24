@@ -51,10 +51,6 @@ async function initDb() {
     );
   `);
 
-  // MESSAGES
-  // Drop table if exists so every start has fresh schema
-  await runSafe(`DROP TABLE IF EXISTS messages CASCADE;`);
-
   await runSafe(`
     CREATE TABLE messages (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
