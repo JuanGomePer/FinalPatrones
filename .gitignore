@@ -1,4 +1,48 @@
+# === NODE ===
 node_modules/
+**/node_modules/
+
+# === DIST / BUILDS ===
+dist/
+**/dist/
+dist-ssr/
+build/
+**/build/
+
+# === ENV FILES ===
 .env
 .env.*
+*/.env
+*/.env.*
+
+# === LOGS ===
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# === EDITORS ===
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# === DOCKER ===
+docker-data/
+**/docker-data/
+*.pid
+
+# === TEMP / CACHE ===
+tmp/
+temp/
+.cache/
+**/.cache/
+*.local

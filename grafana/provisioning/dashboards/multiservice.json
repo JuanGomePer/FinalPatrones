@@ -1,0 +1,42 @@
+{
+  "id": null,
+  "uid": "ws-metrics",
+  "title": "WebSocket Metrics",
+  "tags": ["ws", "prometheus"],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Messages Received",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "ws_messages_received_total", "legendFormat": "received" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Messages Broadcasted",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "ws_messages_broadcasted_total",
+          "legendFormat": "broadcasted"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Message Processing Duration (Avg)",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(ws_message_duration_seconds_sum[1m]) / rate(ws_message_duration_seconds_count[1m])",
+          "legendFormat": "avg duration (s)"
+        }
+      ]
+    }
+  ]
+}

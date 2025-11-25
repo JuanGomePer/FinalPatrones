@@ -1,11 +1,11 @@
-const db = require('./index');
+const db = require("./index");
 
 // Ejecuta SQL ignorando errores en "already exists"
 async function runSafe(query) {
   try {
     await db.query(query);
   } catch (err) {
-    if (!String(err.message).includes('already exists')) {
+    if (!String(err.message).includes("already exists")) {
       console.error("❌ DB INIT ERROR:", err);
     }
   }
@@ -51,20 +51,24 @@ async function initDb() {
     );
   `);
 
-  // MESSAGES
   await runSafe(`
-    CREATE TABLE IF NOT EXISTS messages (
+    CREATE TABLE messages (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
       user_id UUID REFERENCES users(id) ON DELETE SET NULL,
       content TEXT NOT NULL,
+      username VARCHAR(255),          -- <- NEW COLUMN
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
 
-  // INDEXES (para optimizar búsquedas)
-  await runSafe(`CREATE INDEX IF NOT EXISTS idx_messages_room_created ON messages(room_id, created_at DESC);`);
-  await runSafe(`CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id);`);
+  // INDEXES
+  await runSafe(
+    `CREATE INDEX IF NOT EXISTS idx_messages_room_created ON messages(room_id, created_at DESC);`
+  );
+  await runSafe(
+    `CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id);`
+  );
 
   console.log("✅ Base de datos lista.");
 }
