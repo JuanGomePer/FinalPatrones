@@ -20,6 +20,7 @@ Servicios:
 - API: http://localhost:3000
 - WS: ws://localhost:4000?token=JWT
 - RabbitMQ management: http://localhost:15672 (guest/guest)
+- graphana: http://localhost:3001  (admin/admin)
 
 ## Migraciones
 Dentro del contenedor de db o local:
