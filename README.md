@@ -8,6 +8,9 @@ Integrantes:
 
 
 
+## VIDEO
+https://youtu.be/y4mEbMW5m3Q
+
 ## Requisitos
 - Docker & docker-compose
 - Node.js >= 18 
