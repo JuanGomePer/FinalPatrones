@@ -29,19 +29,15 @@ jobs:
       - name: Start services
         run: docker-compose -f docker-compose.yaml up --build -d --force-recreate --remove-orphans
 
-      # 5️⃣ Limpiar node_modules y package-lock antiguo y corregir permisos
-      - name: Clean and fix backend permissions
+      # 5️⃣ Limpiar backend y corregir permisos
+      - name: Clean backend for safe npm install
         working-directory: ./Backend
         run: |
-          rm -rf node_modules package-lock.json
+          sudo rm -rf node_modules package-lock.json
           sudo chown -R $USER:$USER .
+          npm install --omit=dev --unsafe-perm
 
-      # 6️⃣ Instalar dependencias del backend de manera segura
-      - name: Install backend dependencies
-        working-directory: ./Backend
-        run: npm install --omit=dev --unsafe-perm
-
-      # 7️⃣ Ejecutar Unit Tests (si existen)
+      # 6️⃣ Ejecutar Unit Tests (si existen)
       - name: Run unit tests
         working-directory: ./Backend
         run: |
@@ -51,11 +47,11 @@ jobs:
             echo "Unit tests failed!" && exit 1
           fi
 
-      # 8️⃣ Instalar Newman para Integration Tests
+      # 7️⃣ Instalar Newman para Integration Tests
       - name: Install Newman
         run: npm install -g newman
 
-      # 9️⃣ Ejecutar Integration Tests con login y endpoints dependientes
+      # 8️⃣ Ejecutar Integration Tests (Login + dependientes)
       - name: Run Postman integration tests
         run: newman run ./postman.json \
           --folder "Login" \
@@ -64,10 +60,10 @@ jobs:
           --folder "Join Room" \
           --folder "Room Messages"
 
-      # 🔟 Ver logs de contenedores (opcional para debugging)
+      # 9️⃣ Mostrar logs de contenedores (útil si algo falla)
       - name: Show container logs
         run: docker-compose -f docker-compose.yaml logs --tail=50
 
-      # 1️⃣1️⃣ Limpiar contenedores
+      # 🔟 Limpiar contenedores
       - name: Tear down Docker Compose
         run: docker-compose -f docker-compose.yaml down --remove-orphans
