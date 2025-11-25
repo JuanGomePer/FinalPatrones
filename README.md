@@ -37,7 +37,7 @@ Mensajes JSON desde cliente:
 El worker persiste mensajes y publica `message.persisted` que el WS recibe y retransmite a todos los clientes conectados en la sala.
 
 
-##DOCUMENTOCIÓ - Sistema de Chat en Tiempo Real con WebSockets
+## DOCUMENTOCIÓN - Sistema de Chat en Tiempo Real con WebSockets
 
 1\. Requisitos del Sistema
 
@@ -159,6 +159,10 @@ Frontend → API Gateway → RabbitMQ → WebSocket Server → Usuarios.
 
 Postgres almacena users, rooms, mensajes.
 
-9\. Conclusión Técnica
+![Imagen de WhatsApp 2025-11-24 a las 22 17 10_eb58d469](https://github.com/user-attachments/assets/a649e5a0-983f-41bb-8b53-3770e8982694)
 
-La solución cumple el parcial: tiempo real, broker, persistencia, desacoplamiento y escalabilidad.
+
+9\. Conclusión Técnica
+El proyecto implementa los conceptos clave del parcial: arquitectura orientada a eventos, mensajería en tiempo real, desacoplamiento mediante broker, persistencia en DB y entrega de información tanto por WebSockets como por REST. La solución final puede escalar horizontalmente mediante la separación API–WS y el uso de RabbitMQ, cumpliendo con los patrones solicitados en el parcial.
+
+
