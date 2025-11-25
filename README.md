@@ -35,3 +35,130 @@ Mensajes JSON desde cliente:
 - `{ "type": "message", "roomId": "<id>", "content": "hola", "clientId": "optional" }`
 
 El worker persiste mensajes y publica `message.persisted` que el WS recibe y retransmite a todos los clientes conectados en la sala.
+
+
+##DOCUMENTOCIÓ - Sistema de Chat en Tiempo Real con WebSockets
+
+1\. Requisitos del Sistema
+
+1.1 Requisitos Funcionales (RF)
+
+Autenticación JWT para permitir que los usuarios se conecten.
+
+Crear / entrar / salir salas (rooms públicas y privadas).
+
+Enviar y recibir mensajes en tiempo real mediante WebSocket.
+
+Persistencia de mensajes en Postgres.
+
+Consultar historial por REST, con paginación.
+
+Notificaciones en tiempo real al entrar o salir una sala.
+
+Control de acceso a salas privadas (password o invitación).
+
+1.2 Requisitos No Funcionales (RNF)
+
+Concurrencia para decenas de usuarios simultáneos.
+
+Latencia < 850 ms.
+
+Durabilidad de mensajes confirmados.
+
+Observabilidad con logs y Prometheus.
+
+Despliegue mediante docker-compose.
+
+Uso obligatorio de RabbitMQ.
+
+2\. Arquitectura del Sistema
+
+Basada en la estructura del proyecto:
+
+Backend/src/api/index.js (REST)
+
+Backend/src/broker/index.js (publisher)
+
+Backend/src/broker/consumer.js (subscriber)
+
+Backend/src/db/init.js y migrations.sql
+
+Backend/src/utils/jwt.js
+
+Backend/src/ws/index.js (WebSocket server)
+
+Frontend/src (Vite + React)
+
+docker-compose.yaml
+
+prometheus.yml
+
+2.1 Componentes
+
+Frontend: login, WebSocket, historial REST.
+
+API REST: login, rooms, historial, permisos.
+
+WebSocket Server: conexiones, JWT, eventos.
+
+RabbitMQ: publish/subscribe.
+
+Postgres: users, rooms, members, messages.
+
+Prometheus: métricas.
+
+Docker-compose: orquestación.
+
+3\. Modelo de Datos
+
+users: id, username, password_hash, created_at.
+
+rooms: id, name, is_private, password_hash.
+
+room_members: user_id, room_id, joined_at.
+
+messages: id, room_id, user_id, content, created_at.
+
+4\. ADRs
+
+ADR 001: WebSockets nativos.
+
+ADR 002: RabbitMQ obligatorio.
+
+ADR 003: Persistencia en Postgres.
+
+ADR 004: JWT como autenticación.
+
+ADR 005: Separación API-WebSocket.
+
+5\. APIs REST
+
+POST /api/login → devuelve JWT.
+
+POST /api/rooms → crea sala.
+
+GET /api/rooms/:id/messages?page=&limit= → historial paginado.
+
+6\. Eventos WebSocket
+
+Cliente → Servidor: join_room, leave_room, send_message.
+
+Servidor → Cliente: room_joined, room_left, new_message, error.
+
+7\. Flujos Principales
+
+Login: credenciales → JWT → WebSocket con token.
+
+Enviar mensaje: Cliente → API → RabbitMQ → WebSocket server → broadcast.
+
+Historial: GET REST paginado.
+
+8\. Arquitectura (texto)
+
+Frontend → API Gateway → RabbitMQ → WebSocket Server → Usuarios.
+
+Postgres almacena users, rooms, mensajes.
+
+9\. Conclusión Técnica
+
+La solución cumple el parcial: tiempo real, broker, persistencia, desacoplamiento y escalabilidad.
