@@ -1,4 +1,11 @@
 # FinalPatrones
+## Integrantes
+Integrantes:
+
+    Juan Andrés Gómez
+    Daniel Santiago Ramirez Chinchilla
+    Santiago Navarro Cuy
+
 
 ## Requisitos
 - Docker & docker-compose
