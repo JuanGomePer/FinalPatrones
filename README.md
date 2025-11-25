@@ -11,6 +11,9 @@ Integrantes:
 ## VIDEO
 https://youtu.be/y4mEbMW5m3Q
 
+## Github actions pruebas de docker
+<img width="2549" height="712" alt="image" src="https://github.com/user-attachments/assets/1e0ff17e-4909-4372-9119-6ba109bfc4fb" />
+
 ## Requisitos
 - Docker & docker-compose
 - Node.js >= 18 
