@@ -37,7 +37,7 @@ Mensajes JSON desde cliente:
 El worker persiste mensajes y publica `message.persisted` que el WS recibe y retransmite a todos los clientes conectados en la sala.
 
 
-## DOCUMENTOCIÓN - Sistema de Chat en Tiempo Real con WebSockets
+## DOCUMENTACIÓN - Sistema de Chat en Tiempo Real con WebSockets
 
 1\. Requisitos del Sistema
 
