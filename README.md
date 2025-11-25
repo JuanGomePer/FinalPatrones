@@ -39,9 +39,9 @@ El worker persiste mensajes y publica `message.persisted` que el WS recibe y ret
 
 ## DOCUMENTACIÓN - Sistema de Chat en Tiempo Real con WebSockets
 
-1\. Requisitos del Sistema
+##  1\. Requisitos del Sistema
 
-1.1 Requisitos Funcionales (RF)
+### 1.1 Requisitos Funcionales (RF)
 
 Autenticación JWT para permitir que los usuarios se conecten.
 
@@ -57,7 +57,7 @@ Notificaciones en tiempo real al entrar o salir una sala.
 
 Control de acceso a salas privadas (password o invitación).
 
-1.2 Requisitos No Funcionales (RNF)
+### 1.2 Requisitos No Funcionales (RNF)
 
 Concurrencia para decenas de usuarios simultáneos.
 
@@ -71,7 +71,7 @@ Despliegue mediante docker-compose.
 
 Uso obligatorio de RabbitMQ.
 
-2\. Arquitectura del Sistema
+## 2\. Arquitectura del Sistema
 
 Basada en la estructura del proyecto:
 
@@ -93,7 +93,7 @@ docker-compose.yaml
 
 prometheus.yml
 
-2.1 Componentes
+### 2.1 Componentes
 
 Frontend: login, WebSocket, historial REST.
 
@@ -109,7 +109,7 @@ Prometheus: métricas.
 
 Docker-compose: orquestación.
 
-3\. Modelo de Datos
+## 3\. Modelo de Datos
 
 users: id, username, password_hash, created_at.
 
@@ -119,7 +119,7 @@ room_members: user_id, room_id, joined_at.
 
 messages: id, room_id, user_id, content, created_at.
 
-4\. ADRs
+## 4\. ADRs
 
 ADR 001: WebSockets nativos.
 
@@ -131,7 +131,7 @@ ADR 004: JWT como autenticación.
 
 ADR 005: Separación API-WebSocket.
 
-5\. APIs REST
+## 5\. APIs REST
 
 POST /api/login → devuelve JWT.
 
@@ -139,13 +139,13 @@ POST /api/rooms → crea sala.
 
 GET /api/rooms/:id/messages?page=&limit= → historial paginado.
 
-6\. Eventos WebSocket
+## 6\. Eventos WebSocket
 
 Cliente → Servidor: join_room, leave_room, send_message.
 
 Servidor → Cliente: room_joined, room_left, new_message, error.
 
-7\. Flujos Principales
+## 7\. Flujos Principales
 
 Login: credenciales → JWT → WebSocket con token.
 
@@ -153,7 +153,7 @@ Enviar mensaje: Cliente → API → RabbitMQ → WebSocket server → broadcast.
 
 Historial: GET REST paginado.
 
-8\. Arquitectura (texto)
+## 8\. Arquitectura (texto)
 
 Frontend → API Gateway → RabbitMQ → WebSocket Server → Usuarios.
 
@@ -162,7 +162,7 @@ Postgres almacena users, rooms, mensajes.
 ![Imagen de WhatsApp 2025-11-24 a las 22 17 10_eb58d469](https://github.com/user-attachments/assets/a649e5a0-983f-41bb-8b53-3770e8982694)
 
 
-9\. Conclusión Técnica
+## 9\. Conclusión Técnica
 El proyecto implementa los conceptos clave del parcial: arquitectura orientada a eventos, mensajería en tiempo real, desacoplamiento mediante broker, persistencia en DB y entrega de información tanto por WebSockets como por REST. La solución final puede escalar horizontalmente mediante la separación API–WS y el uso de RabbitMQ, cumpliendo con los patrones solicitados en el parcial.
 
 
