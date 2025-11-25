@@ -130,7 +130,7 @@ services:
       - "4318:4318" # OTLP HTTP
 
   frontend:
-    build: ./frontend
+    build: ./Frontend
     ports:
       - "8080:80"
     depends_on:
