@@ -1,4 +1,4 @@
-name: CI/CD Docker Compose
+name: CI/CD Docker Compose with Tests
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  deploy:
+  deploy-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,19 +14,53 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Instalar docker-compose
+      # 2️⃣ Listar archivos para depuración
+      - name: List repository files
+        run: ls -R
+
+      # 3️⃣ Instalar Docker Compose
       - name: Install Docker Compose
         run: |
           sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose version
 
-      # 3️⃣ Construir y levantar servicios
-      - name: Build and run Docker Compose
+      # 4️⃣ Levantar contenedores necesarios
+      - name: Start services
+        run: docker-compose -f docker-compose.yaml up --build -d --force-recreate --remove-orphans
+
+      # 5️⃣ Instalar Node y dependencias para backend
+      - name: Install backend dependencies
+        working-directory: ./Backend
+        run: npm install --omit=dev
+
+      # 6️⃣ Ejecutar Unit Tests (si existen)
+      - name: Run unit tests
+        working-directory: ./Backend
         run: |
-          docker-compose -f docker-compose.yaml up --build -d --force-recreate --remove-orphans
+          if npm run test; then
+            echo "Unit tests passed!"
+          else
+            echo "Unit tests failed!" && exit 1
+          fi
 
+      # 7️⃣ Instalar Newman para Integration Tests
+      - name: Install Newman
+        run: npm install -g newman
 
-      # 4️⃣ Verificar que los contenedores estén corriendo
-      - name: List running containers
-        run: docker ps
+      # 8️⃣ Ejecutar Integration Tests con login y endpoints dependientes
+      - name: Run Postman integration tests
+        run: newman run ./postman.json \
+          --folder "Login" \
+          --folder "Create Room" \
+          --folder "List Rooms" \
+          --folder "Join Room" \
+          --folder "Room Messages"
+
+      # 9️⃣ Ver logs de contenedores (opcional para debugging)
+      - name: Show container logs
+        run: docker-compose -f docker-compose.yaml logs --tail=50
+
+      # 🔟 Limpiar contenedores
+      - name: Tear down Docker Compose
+        run: docker-compose -f docker-compose.yaml down --remove-orphans
