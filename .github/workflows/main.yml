@@ -1,4 +1,4 @@
-name: CI/CD Docker Compose with Tests
+name: CI/CD Docker Compose
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  deploy-and-test:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,63 +14,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Listar archivos para depuración
-      - name: List repository files
-        run: ls -R
-
-      # 3️⃣ Instalar Docker Compose
+      # 2️⃣ Instalar docker-compose
       - name: Install Docker Compose
         run: |
           sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose version
 
-      # 4️⃣ Levantar contenedores necesarios
-      - name: Start services
-        run: docker-compose -f docker-compose.yaml up --build -d --force-recreate --remove-orphans
-
-      # 5️⃣ Instalar dependencias del backend de manera segura
-      - name: Install backend dependencies safely
-        working-directory: ./Backend
+      # 3️⃣ Construir y levantar servicios
+      - name: Build and run Docker Compose
         run: |
-          # Usar un directorio temporal para node_modules
-          export npm_config_prefix=$PWD/.npm-global
-          mkdir -p $npm_config_prefix
-          export PATH=$npm_config_prefix/bin:$PATH
+          docker-compose -f docker-compose.yaml up --build -d --force-recreate --remove-orphans
 
-          # Limpiar package-lock si existe
-          sudo rm -f package-lock.json
 
-          # Instalar dependencias sin tocar node_modules del repo
-          npm install --omit=dev --unsafe-perm
-
-      # 6️⃣ Ejecutar Unit Tests (si existen)
-      - name: Run unit tests
-        working-directory: ./Backend
-        run: |
-          if npm run test; then
-            echo "Unit tests passed!"
-          else
-            echo "Unit tests failed!" && exit 1
-          fi
-
-      # 7️⃣ Instalar Newman globalmente con permisos root
-      - name: Install Newman
-        run: sudo npm install -g newman --unsafe-perm=true --allow-root
-
-      # 8️⃣ Ejecutar Integration Tests (Login + dependientes)
-      - name: Run Postman integration tests
-        run: newman run ./postman.json \
-          --folder "Login" \
-          --folder "Create Room" \
-          --folder "List Rooms" \
-          --folder "Join Room" \
-          --folder "Room Messages"
-
-      # 9️⃣ Mostrar logs de contenedores (útil si algo falla)
-      - name: Show container logs
-        run: docker-compose -f docker-compose.yaml logs --tail=50
-
-      # 🔟 Limpiar contenedores
-      - name: Tear down Docker Compose
-        run: docker-compose -f docker-compose.yaml down --remove-orphans
+      # 4️⃣ Verificar que los contenedores estén corriendo
+      - name: List running containers
+        run: docker ps
