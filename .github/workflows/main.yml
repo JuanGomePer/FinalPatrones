@@ -33,7 +33,7 @@ jobs:
       - name: Install backend dependencies safely
         working-directory: ./Backend
         run: |
-          # Usar un directorio temporal para node_modules para evitar errores de permisos
+          # Usar un directorio temporal para node_modules
           export npm_config_prefix=$PWD/.npm-global
           mkdir -p $npm_config_prefix
           export PATH=$npm_config_prefix/bin:$PATH
@@ -54,9 +54,9 @@ jobs:
             echo "Unit tests failed!" && exit 1
           fi
 
-      # 7️⃣ Instalar Newman para Integration Tests
+      # 7️⃣ Instalar Newman globalmente con permisos root
       - name: Install Newman
-        run: npm install -g newman
+        run: sudo npm install -g newman --unsafe-perm=true --allow-root
 
       # 8️⃣ Ejecutar Integration Tests (Login + dependientes)
       - name: Run Postman integration tests
