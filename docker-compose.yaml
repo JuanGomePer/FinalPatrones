@@ -48,7 +48,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./Backend:/app # ← FIXED
+      - ./Backend:/app
     working_dir: /app
 
   ws:
@@ -70,7 +70,7 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - ./Backend:/app # ← FIXED
+      - ./Backend:/app
     working_dir: /app
 
   worker:
@@ -90,15 +90,16 @@ services:
       db:
         condition: service_started
     volumes:
-      - ./Backend:/app # ← FIXED
+      - ./Backend:/app
     working_dir: /app
+
   # --------------------------
   # PROMETHEUS
   # --------------------------
   prometheus:
     image: prom/prometheus
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
     depends_on:
@@ -131,7 +132,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "8080:80" # nginx serves the app
+      - "8080:80"
     depends_on:
       - api
 

@@ -66,4 +66,25 @@ async function connectWithRetry(retries = 10, delay = 3000) {
       channel.nack(msg, false, false);
     }
   });
+
+  const client = require("prom-client");
+
+  // Create a counter for processed messages
+  const messagesProcessed = new client.Counter({
+    name: "worker_messages_processed_total",
+    help: "Total number of messages processed by the worker",
+  });
+
+  // Expose metrics via HTTP for Prometheus to scrape
+  const express = require("express");
+  const app = express();
+
+  app.get("/metrics", async (req, res) => {
+    res.set("Content-Type", client.register.contentType);
+    res.end(await client.register.metrics());
+  });
+
+  app.listen(9100, () => {
+    console.log("Prometheus metrics server running on port 9100");
+  });
 })();

@@ -6,8 +6,39 @@ const WebSocket = require("ws");
 const url = require("url");
 const jwtUtils = require("../utils/jwt");
 const { connect } = require("../broker");
+const client = require("prom-client");
+const express = require("express");
 
 const WS_PORT = process.env.WS_PORT || 4000;
+
+// --------------------------
+// Prometheus metrics
+// --------------------------
+const wsMessagesReceived = new client.Counter({
+  name: "ws_messages_received_total",
+  help: "Total number of WebSocket messages received",
+});
+
+const wsMessagesBroadcasted = new client.Counter({
+  name: "ws_messages_broadcasted_total",
+  help: "Total number of WebSocket messages broadcasted",
+});
+
+const wsMessageDuration = new client.Histogram({
+  name: "ws_message_duration_seconds",
+  help: "Time taken to process and broadcast a WS message",
+  buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 2, 5],
+});
+
+// Expose metrics for Prometheus
+const metricsApp = express();
+metricsApp.get("/metrics", async (req, res) => {
+  res.set("Content-Type", client.register.contentType);
+  res.end(await client.register.metrics());
+});
+metricsApp.listen(9090, () => {
+  console.log("[WS] Prometheus metrics server running on port 9090");
+});
 
 (async () => {
   let channel;
@@ -31,7 +62,6 @@ const WS_PORT = process.env.WS_PORT || 4000;
 
   channel = await connectRabbitMQ();
 
-  // Queue for persisted messages
   await channel.assertQueue("broadcast_queue", { durable: true });
   await channel.bindQueue("broadcast_queue", "chat", "message.persisted");
 
@@ -40,7 +70,6 @@ const WS_PORT = process.env.WS_PORT || 4000;
 
   const rooms = new Map();
 
-  // Helper to log current users in rooms
   function logRooms() {
     console.log("[WS] Current rooms and users:");
     for (const [roomId, set] of rooms.entries()) {
@@ -49,7 +78,9 @@ const WS_PORT = process.env.WS_PORT || 4000;
     }
   }
 
+  // --------------------------
   // RABBITMQ → WS BROADCAST
+  // --------------------------
   channel.consume("broadcast_queue", (msg) => {
     if (!msg) return;
     try {
@@ -69,14 +100,15 @@ const WS_PORT = process.env.WS_PORT || 4000;
         `  Message content: ${message.content} from user ${message.user.username}`
       );
 
+      // Measure broadcast duration
+      const end = wsMessageDuration.startTimer();
       for (const client of set) {
         if (client.ws.readyState === WebSocket.OPEN) {
           client.ws.send(JSON.stringify({ type: "message", data: message }));
-          console.log(`    Sent to ${client.user.username}`);
-        } else {
-          console.log(`    Client ${client.user.username} not open, skipping`);
+          wsMessagesBroadcasted.inc();
         }
       }
+      end();
 
       logRooms();
       channel.ack(msg);
@@ -86,7 +118,9 @@ const WS_PORT = process.env.WS_PORT || 4000;
     }
   });
 
+  // --------------------------
   // WS → RabbitMQ
+  // --------------------------
   wss.on("connection", (ws, req) => {
     const parsed = url.parse(req.url, true);
     const token = parsed.query.token;
@@ -105,6 +139,9 @@ const WS_PORT = process.env.WS_PORT || 4000;
 
     ws.on("message", async (raw) => {
       try {
+        wsMessagesReceived.inc();
+        const timerEnd = wsMessageDuration.startTimer();
+
         const msg = JSON.parse(raw.toString());
         const roomId = msg.roomId;
 
@@ -158,6 +195,8 @@ const WS_PORT = process.env.WS_PORT || 4000;
             { persistent: true }
           );
         }
+
+        timerEnd(); // record duration
       } catch (err) {
         console.error("[WS] message error:", err);
       }
