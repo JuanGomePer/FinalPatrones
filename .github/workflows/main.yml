@@ -29,12 +29,19 @@ jobs:
       - name: Start services
         run: docker-compose -f docker-compose.yaml up --build -d --force-recreate --remove-orphans
 
-      # 5️⃣ Limpiar backend y corregir permisos
-      - name: Clean backend for safe npm install
+      # 5️⃣ Instalar dependencias del backend de manera segura
+      - name: Install backend dependencies safely
         working-directory: ./Backend
         run: |
-          sudo rm -rf node_modules package-lock.json
-          sudo chown -R $USER:$USER .
+          # Usar un directorio temporal para node_modules para evitar errores de permisos
+          export npm_config_prefix=$PWD/.npm-global
+          mkdir -p $npm_config_prefix
+          export PATH=$npm_config_prefix/bin:$PATH
+
+          # Limpiar package-lock si existe
+          sudo rm -f package-lock.json
+
+          # Instalar dependencias sin tocar node_modules del repo
           npm install --omit=dev --unsafe-perm
 
       # 6️⃣ Ejecutar Unit Tests (si existen)
