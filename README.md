@@ -7,6 +7,7 @@ Integrantes:
     Santiago Navarro Cuy
 
 
+
 ## Requisitos
 - Docker & docker-compose
 - Node.js >= 18 
