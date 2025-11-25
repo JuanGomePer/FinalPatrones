@@ -24,7 +24,8 @@ jobs:
       # 3️⃣ Construir y levantar servicios
       - name: Build and run Docker Compose
         run: |
-          docker-compose -f docker-compose.yaml up --build -d
+          docker-compose -f docker-compose.yaml up --build -d --force-recreate --remove-orphans
+
 
       # 4️⃣ Verificar que los contenedores estén corriendo
       - name: List running containers
