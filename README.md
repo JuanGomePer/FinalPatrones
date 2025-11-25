@@ -159,7 +159,8 @@ Frontend → API Gateway → RabbitMQ → WebSocket Server → Usuarios.
 
 Postgres almacena users, rooms, mensajes.
 
-![Imagen de WhatsApp 2025-11-24 a las 22 17 10_eb58d469](https://github.com/user-attachments/assets/a649e5a0-983f-41bb-8b53-3770e8982694)
+<img width="674" height="670" alt="image" src="https://github.com/user-attachments/assets/98923c71-24e2-4f6e-83c7-47dfa76b310b" />
+
 
 
 ## 9\. Conclusión Técnica
