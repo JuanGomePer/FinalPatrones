@@ -13,7 +13,7 @@
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"username\": \"user20254\",\n  \"password\": \"pass123\"\n}"
+          "raw": "{\n  \"username\": \"user2025858585\",\n  \"password\": \"pass123\"\n}"
         },
         "url": {
           "raw": "http://localhost:3000/auth/register",
@@ -45,7 +45,7 @@
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"username\": \"user20254\",\n  \"password\": \"pass123\"\n}"
+          "raw": "{\n  \"username\": \"user2025858585\",\n  \"password\": \"pass123\"\n}"
         },
         "url": {
           "raw": "http://localhost:3000/auth/login",
