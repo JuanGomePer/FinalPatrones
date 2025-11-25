@@ -14,18 +14,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Instalar docker-compose
+      # 2️⃣ Listar archivos para depuración
+      - name: List repository files
+        run: ls -R
+
+      # 3️⃣ Instalar Docker Compose
       - name: Install Docker Compose
         run: |
           sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose version
 
-      # 3️⃣ Construir y levantar servicios
+      # 4️⃣ Construir y levantar servicios
       - name: Build and run Docker Compose
-        run: |
-          docker-compose -f docker-compose.yaml up --build -d
+        run: docker-compose -f docker-compose.yaml up --build -d
 
-      # 4️⃣ Verificar que los contenedores estén corriendo
+      # 5️⃣ Verificar que los contenedores estén corriendo
       - name: List running containers
         run: docker ps
